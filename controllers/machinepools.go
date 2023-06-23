@@ -3,6 +3,9 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
+
 	ocmsdk "github.com/openshift-online/ocm-sdk-go"
 	cmv1 "github.com/openshift-online/ocm-sdk-go/clustersmgmt/v1"
 	"github.com/openshift-online/ocm-sdk-go/logging"
@@ -10,8 +13,6 @@ import (
 	arbv1 "github.com/project-codeflare/multi-cluster-app-dispatcher/pkg/apis/controller/v1beta1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/klog"
-	"os"
-	"strings"
 )
 
 func scaleMachinePool(aw *arbv1.AppWrapper, userRequestedInstanceType string, replicas int) {
@@ -78,6 +79,37 @@ func deleteMachinePool(aw *arbv1.AppWrapper) {
 		}
 		return true
 	})
+}
+
+// Check if machine pools exist
+func machinePoolExists() bool {
+	logger, err := ocmsdk.NewGoLoggerBuilder().
+		Debug(false).
+		Build()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Can't build logger: %v\n", err)
+		os.Exit(1)
+	}
+	connection, err := ocmsdk.NewConnectionBuilder().
+		Logger(logger).
+		Tokens(ocmToken).
+		Build()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Can't build connection: %v\n", err)
+		os.Exit(1)
+	}
+	defer connection.Close()
+	connection.ClustersMgmt().V1().Clusters().Cluster(ocmClusterID).NodePools().Add()
+
+	clusterMachinePools := connection.ClustersMgmt().V1().Clusters().Cluster(ocmClusterID).MachinePools()
+	klog.Infof("cluster machine pools %v", clusterMachinePools)
+	if clusterMachinePools != nil {
+		klog.Infof("Machine pools are present %v", clusterMachinePools)
+		return true
+	}
+	return false
+
+
 }
 
 // getOCMClusterID determines the internal clusterID to be used for OCM API calls
